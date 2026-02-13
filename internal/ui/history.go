@@ -15,6 +15,7 @@ import (
 type HistoryModel struct {
 	entry         *model.Entry
 	selectedIndex int
+	expanded      bool
 	Back          bool
 	width         int
 	height        int
@@ -25,6 +26,7 @@ func NewHistoryModel(entry *model.Entry) HistoryModel {
 	return HistoryModel{
 		entry:         entry,
 		selectedIndex: 0,
+		expanded:      false,
 	}
 }
 
@@ -46,11 +48,15 @@ func (m HistoryModel) Update(msg tea.Msg) (HistoryModel, tea.Cmd) {
 		case "up", "k":
 			if m.selectedIndex > 0 {
 				m.selectedIndex--
+				m.expanded = false
 			}
 		case "down", "j":
 			if m.selectedIndex < totalItems-1 {
 				m.selectedIndex++
+				m.expanded = false
 			}
+		case "enter":
+			m.expanded = !m.expanded
 		case "esc", "q":
 			m.Back = true
 		}
@@ -69,11 +75,12 @@ func (m HistoryModel) View() string {
 	selectedStyle := lipgloss.NewStyle().Foreground(t.Selected).Bold(true).PaddingLeft(2)
 	timestampStyle := lipgloss.NewStyle().Foreground(t.Warning).Bold(true)
 	contentStyle := lipgloss.NewStyle().Foreground(t.Text).PaddingLeft(4)
+	expandedContentStyle := lipgloss.NewStyle().Foreground(t.Text).PaddingLeft(4).Width(70)
 	currentBadge := lipgloss.NewStyle().Foreground(t.Success).Bold(true)
 	helpStyle := lipgloss.NewStyle().Foreground(t.Muted)
 	keyStyle := lipgloss.NewStyle().Foreground(t.Accent).Bold(true)
 	dividerStyle := lipgloss.NewStyle().Foreground(t.Muted)
-	fileStyle := lipgloss.NewStyle().Foreground(t.Accent).Italic(true).PaddingLeft(4)
+	fileStyle := lipgloss.NewStyle().Foreground(t.Accent).Italic(true)
 	fileLabelStyle := lipgloss.NewStyle().Foreground(t.Muted).PaddingLeft(4)
 
 	b.WriteString("\n")
@@ -95,7 +102,6 @@ func (m HistoryModel) View() string {
 	// Current version (index 0) - most recent
 	currentLabel := timestampStyle.Render(m.entry.UpdatedAt.Format("2006-01-02 15:04:05"))
 	currentLabel += " " + currentBadge.Render("[Current]")
-	currentPreview := truncate(m.entry.Content, 100)
 
 	if m.selectedIndex == 0 {
 		b.WriteString(selectedStyle.Render("> " + currentLabel))
@@ -103,7 +109,13 @@ func (m HistoryModel) View() string {
 		b.WriteString(itemStyle.Render("  " + currentLabel))
 	}
 	b.WriteString("\n")
-	b.WriteString(contentStyle.Render(currentPreview))
+
+	// Show content (expanded or truncated)
+	if m.selectedIndex == 0 && m.expanded {
+		b.WriteString(expandedContentStyle.Render(m.entry.Content))
+	} else {
+		b.WriteString(contentStyle.Render(truncate(m.entry.Content, 100)))
+	}
 	b.WriteString("\n")
 
 	// Show current attachments
@@ -126,7 +138,6 @@ func (m HistoryModel) View() string {
 
 		label := timestampStyle.Render(record.SavedAt.Format("2006-01-02 15:04:05"))
 		label += fmt.Sprintf(" (v%d)", len(sortedHistory)-i)
-		preview := truncate(record.Content, 100)
 
 		if m.selectedIndex == displayIndex {
 			b.WriteString(selectedStyle.Render("> " + label))
@@ -134,7 +145,13 @@ func (m HistoryModel) View() string {
 			b.WriteString(itemStyle.Render("  " + label))
 		}
 		b.WriteString("\n")
-		b.WriteString(contentStyle.Render(preview))
+
+		// Show content (expanded or truncated)
+		if m.selectedIndex == displayIndex && m.expanded {
+			b.WriteString(expandedContentStyle.Render(record.Content))
+		} else {
+			b.WriteString(contentStyle.Render(truncate(record.Content, 100)))
+		}
 		b.WriteString("\n")
 
 		// Show attachments for this save
@@ -153,6 +170,7 @@ func (m HistoryModel) View() string {
 
 	var parts []string
 	parts = append(parts, keyStyle.Render("Up/Down")+" navigate")
+	parts = append(parts, keyStyle.Render("Enter")+" expand/collapse")
 	parts = append(parts, keyStyle.Render("Esc/q")+" back")
 	b.WriteString(helpStyle.Render(strings.Join(parts, " | ")))
 
