@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"path/filepath"
+	"regexp"
 	"strings"
 
 	"journal/internal/storage"
@@ -14,8 +16,8 @@ import (
 type setupStep int
 
 const (
-	stepChoosePath setupStep = iota
-	stepEnterName
+	stepEnterName setupStep = iota
+	stepChoosePath
 	stepChooseEncryption
 	stepEnterPassword
 	stepConfirmPassword
@@ -37,6 +39,7 @@ type SetupModel struct {
 	Done            bool
 	Error           string
 	defaultPath     string
+	baseDir         string
 }
 
 func NewSetupModel() SetupModel {
@@ -49,6 +52,7 @@ func NewSetupModel() SetupModel {
 	ni.Placeholder = "My Journal"
 	ni.CharLimit = 50
 	ni.Width = 30
+	ni.Focus()
 
 	pi := textinput.New()
 	pi.Placeholder = "Enter password"
@@ -64,21 +68,47 @@ func NewSetupModel() SetupModel {
 	ci.CharLimit = 256
 	ci.Width = 30
 
-	defaultPath, _ := storage.GetDefaultDBPath()
+	baseDir, _ := storage.GetConfigPath()
+	baseDir = filepath.Dir(baseDir)
 
 	return SetupModel{
-		step:          stepChoosePath,
+		step:          stepEnterName,
 		textInput:     ti,
 		nameInput:     ni,
 		passwordInput: pi,
 		confirmInput:  ci,
 		selectedOpt:   0,
-		defaultPath:   defaultPath,
+		baseDir:       baseDir,
 	}
 }
 
+// sanitizeFilename converts a journal name to a safe filename
+func sanitizeFilename(name string) string {
+	// Convert to lowercase
+	name = strings.ToLower(name)
+	// Replace spaces with underscores
+	name = strings.ReplaceAll(name, " ", "_")
+	// Remove any characters that aren't alphanumeric, underscore, or hyphen
+	reg := regexp.MustCompile(`[^a-z0-9_-]`)
+	name = reg.ReplaceAllString(name, "")
+	// Trim to reasonable length
+	if len(name) > 30 {
+		name = name[:30]
+	}
+	// Default if empty
+	if name == "" {
+		name = "journal"
+	}
+	return name
+}
+
+func (m *SetupModel) generateDefaultPath() {
+	filename := sanitizeFilename(m.Name) + ".db"
+	m.defaultPath = filepath.Join(m.baseDir, filename)
+}
+
 func (m SetupModel) Init() tea.Cmd {
-	return nil
+	return textinput.Blink
 }
 
 func (m SetupModel) Update(msg tea.Msg) (SetupModel, tea.Cmd) {
@@ -87,16 +117,31 @@ func (m SetupModel) Update(msg tea.Msg) (SetupModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch m.step {
+		case stepEnterName:
+			switch msg.String() {
+			case "enter":
+				m.Name = m.nameInput.Value()
+				if m.Name == "" {
+					m.Name = "My Journal"
+				}
+				m.generateDefaultPath()
+				m.step = stepChoosePath
+				m.nameInput.Blur()
+				return m, nil
+			}
+			m.nameInput, cmd = m.nameInput.Update(msg)
+			return m, cmd
+
 		case stepChoosePath:
 			if m.showPathInput {
 				switch msg.String() {
 				case "enter":
 					if m.textInput.Value() != "" {
 						m.DBPath = m.textInput.Value()
-						m.step = stepEnterName
-						m.nameInput.Focus()
+						m.step = stepChooseEncryption
 						m.showPathInput = false
-						return m, textinput.Blink
+						m.textInput.Blur()
+						return m, nil
 					}
 					return m, nil
 				case "esc":
@@ -120,33 +165,18 @@ func (m SetupModel) Update(msg tea.Msg) (SetupModel, tea.Cmd) {
 			case "enter":
 				if m.selectedOpt == 0 {
 					m.DBPath = m.defaultPath
-					m.step = stepEnterName
-					m.nameInput.Focus()
-					return m, textinput.Blink
+					m.step = stepChooseEncryption
+					return m, nil
 				} else {
 					m.showPathInput = true
 					m.textInput.Focus()
 					return m, textinput.Blink
 				}
-			}
-
-		case stepEnterName:
-			switch msg.String() {
-			case "enter":
-				m.Name = m.nameInput.Value()
-				if m.Name == "" {
-					m.Name = "My Journal"
-				}
-				m.step = stepChooseEncryption
-				m.nameInput.Blur()
-				return m, nil
 			case "esc":
-				m.step = stepChoosePath
-				m.nameInput.Blur()
-				return m, nil
+				m.step = stepEnterName
+				m.nameInput.Focus()
+				return m, textinput.Blink
 			}
-			m.nameInput, cmd = m.nameInput.Update(msg)
-			return m, cmd
 
 		case stepChooseEncryption:
 			switch msg.String() {
@@ -169,9 +199,8 @@ func (m SetupModel) Update(msg tea.Msg) (SetupModel, tea.Cmd) {
 					return m, textinput.Blink
 				}
 			case "esc":
-				m.step = stepEnterName
-				m.nameInput.Focus()
-				return m, textinput.Blink
+				m.step = stepChoosePath
+				return m, nil
 			}
 
 		case stepEnterPassword:
@@ -187,6 +216,7 @@ func (m SetupModel) Update(msg tea.Msg) (SetupModel, tea.Cmd) {
 			case "esc":
 				m.step = stepChooseEncryption
 				m.passwordInput.SetValue("")
+				m.passwordInput.Blur()
 				return m, nil
 			}
 			m.Error = ""
@@ -206,7 +236,9 @@ func (m SetupModel) Update(msg tea.Msg) (SetupModel, tea.Cmd) {
 			case "esc":
 				m.step = stepEnterPassword
 				m.confirmInput.SetValue("")
-				return m, nil
+				m.confirmInput.Blur()
+				m.passwordInput.Focus()
+				return m, textinput.Blink
 			}
 			m.Error = ""
 			m.confirmInput, cmd = m.confirmInput.Update(msg)
@@ -239,8 +271,16 @@ func (m SetupModel) View() string {
 	b.WriteString("\n\n")
 
 	switch m.step {
+	case stepEnterName:
+		b.WriteString(promptStyle.Render("Give your journal a name:"))
+		b.WriteString("\n\n")
+		b.WriteString("  ")
+		b.WriteString(m.nameInput.View())
+		b.WriteString("\n\n")
+		b.WriteString(helpStyle.Render(keyStyle.Render("Enter") + " continue"))
+
 	case stepChoosePath:
-		b.WriteString(promptStyle.Render("Where would you like to store your journal?"))
+		b.WriteString(promptStyle.Render("Where would you like to store \"" + m.Name + "\"?"))
 		b.WriteString("\n\n")
 
 		opt1 := "Use default location"
@@ -270,16 +310,8 @@ func (m SetupModel) View() string {
 			b.WriteString(helpStyle.Render("    " + keyStyle.Render("Enter") + " confirm  " + keyStyle.Render("Esc") + " cancel"))
 		} else {
 			b.WriteString("\n")
-			b.WriteString(helpStyle.Render(keyStyle.Render("Up/Down") + " navigate  " + keyStyle.Render("Enter") + " select"))
+			b.WriteString(helpStyle.Render(keyStyle.Render("Up/Down") + " navigate  " + keyStyle.Render("Enter") + " select  " + keyStyle.Render("Esc") + " back"))
 		}
-
-	case stepEnterName:
-		b.WriteString(promptStyle.Render("Give your journal a name:"))
-		b.WriteString("\n\n")
-		b.WriteString("  ")
-		b.WriteString(m.nameInput.View())
-		b.WriteString("\n\n")
-		b.WriteString(helpStyle.Render(keyStyle.Render("Enter") + " continue  " + keyStyle.Render("Esc") + " back"))
 
 	case stepChooseEncryption:
 		b.WriteString(promptStyle.Render("Would you like to encrypt your journal?"))
