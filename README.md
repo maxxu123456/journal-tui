@@ -54,6 +54,45 @@ Journal is a command-line journaling tool built with Go. It provides a full term
 - Live preview when switching themes
 - Theme preference persisted across sessions
 
+## Installation
+
+### From GitHub Releases
+
+Download the appropriate binary for your platform from the [Releases](https://github.com/maxxu/journal/releases) page.
+
+#### macOS
+
+After downloading, you must make the binary executable and allow it to run:
+
+1. Open Terminal and navigate to the download location
+2. Make the binary executable:
+   ```bash
+   chmod +x journal-darwin-arm64
+   ```
+   (Replace `journal-darwin-arm64` with the actual filename if different)
+
+3. On first run, macOS will block the application. To allow it:
+   - Open **System Settings** > **Privacy & Security**
+   - Scroll down to the Security section
+   - Click **Allow Anyway** next to the message about the blocked application
+   - Run the application again and click **Open** when prompted
+
+Alternatively, you can remove the quarantine attribute:
+```bash
+xattr -d com.apple.quarantine journal-darwin-arm64
+```
+
+#### Linux
+
+Make the binary executable:
+```bash
+chmod +x journal-linux-amd64
+```
+
+#### Windows
+
+No additional steps required. Run the `.exe` file directly.
+
 ## Building
 
 ### Prerequisites
