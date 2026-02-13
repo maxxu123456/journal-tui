@@ -261,23 +261,6 @@ The SQLite database contains three tables:
 | github.com/google/uuid | UUID generation for entry and attachment IDs |
 | modernc.org/sqlite | Pure Go SQLite implementation |
 
-### Transitive Dependencies
-
-| Library | Purpose |
-|---------|---------|
-| github.com/atotto/clipboard | Clipboard access |
-| github.com/aymanbagabas/go-osc52/v2 | OSC52 terminal sequences |
-| github.com/charmbracelet/colorprofile | Terminal color profile detection |
-| github.com/charmbracelet/x/ansi | ANSI escape sequence handling |
-| github.com/charmbracelet/x/term | Terminal utilities |
-| github.com/lucasb-eyer/go-colorful | Color manipulation |
-| github.com/mattn/go-isatty | TTY detection |
-| github.com/mattn/go-runewidth | Unicode character width |
-| github.com/muesli/termenv | Terminal environment detection |
-| github.com/rivo/uniseg | Unicode segmentation |
-| modernc.org/libc | C library implementation in Go |
-| modernc.org/memory | Memory allocator for SQLite |
-
 ## Technical Details
 
 ### Encryption Implementation
