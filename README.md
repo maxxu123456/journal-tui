@@ -2,7 +2,7 @@
 
 A terminal-based journaling application with encryption support, file attachments, and version history.
 
-Created by Max Xu
+Created by Max Xu with help from Claude Code.
 
 ## Overview
 
