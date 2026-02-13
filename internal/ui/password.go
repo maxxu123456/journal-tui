@@ -14,6 +14,7 @@ type PasswordModel struct {
 	passwordInput textinput.Model
 	Password      string
 	Done          bool
+	Cancelled     bool
 	Error         string
 }
 
@@ -46,6 +47,9 @@ func (m PasswordModel) Update(msg tea.Msg) (PasswordModel, tea.Cmd) {
 				m.Password = m.passwordInput.Value()
 				m.Done = true
 			}
+			return m, nil
+		case "esc":
+			m.Cancelled = true
 			return m, nil
 		}
 	}
@@ -84,7 +88,7 @@ func (m PasswordModel) View() string {
 	}
 
 	b.WriteString("\n")
-	b.WriteString(helpStyle.Render(keyStyle.Render("Enter") + " unlock"))
+	b.WriteString(helpStyle.Render(keyStyle.Render("Enter") + " unlock | " + keyStyle.Render("Esc") + " back"))
 
 	return b.String()
 }

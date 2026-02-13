@@ -39,6 +39,19 @@ func (m HistoryModel) Init() tea.Cmd {
 	return nil
 }
 
+func (m *HistoryModel) adjustScroll() {
+	visibleItems := (m.height - 10) / 4 // ~4 lines per item
+	if visibleItems < 2 {
+		visibleItems = 2
+	}
+
+	if m.selectedIndex < m.offset {
+		m.offset = m.selectedIndex
+	} else if m.selectedIndex >= m.offset+visibleItems {
+		m.offset = m.selectedIndex - visibleItems + 1
+	}
+}
+
 func (m HistoryModel) Update(msg tea.Msg) (HistoryModel, tea.Cmd) {
 	totalItems := len(m.entry.History) + 1
 
@@ -49,11 +62,13 @@ func (m HistoryModel) Update(msg tea.Msg) (HistoryModel, tea.Cmd) {
 			if m.selectedIndex > 0 {
 				m.selectedIndex--
 				m.expanded = false
+				m.adjustScroll()
 			}
 		case "down", "j":
 			if m.selectedIndex < totalItems-1 {
 				m.selectedIndex++
 				m.expanded = false
+				m.adjustScroll()
 			}
 		case "enter":
 			m.expanded = !m.expanded
@@ -99,70 +114,77 @@ func (m HistoryModel) View() string {
 		return sortedHistory[i].SavedAt.After(sortedHistory[j].SavedAt)
 	})
 
-	// Current version (index 0) - most recent
+	// Build all items: current + history
+	type historyItem struct {
+		index       int
+		label       string
+		content     string
+		attachments string
+	}
+
+	var items []historyItem
+
+	// Current version (index 0)
 	currentLabel := timestampStyle.Render(m.entry.UpdatedAt.Format("2006-01-02 15:04:05"))
 	currentLabel += " " + currentBadge.Render("[Current]")
-
-	if m.selectedIndex == 0 {
-		b.WriteString(selectedStyle.Render("> " + currentLabel))
-	} else {
-		b.WriteString(itemStyle.Render("  " + currentLabel))
-	}
-	b.WriteString("\n")
-
-	// Show content (expanded or truncated)
-	if m.selectedIndex == 0 && m.expanded {
-		b.WriteString(expandedContentStyle.Render(m.entry.Content))
-	} else {
-		b.WriteString(contentStyle.Render(truncate(m.entry.Content, 100)))
-	}
-	b.WriteString("\n")
-
-	// Show current attachments
+	var currentFiles string
 	if len(m.entry.Attachments) > 0 {
-		b.WriteString(fileLabelStyle.Render("Files: "))
 		var fileNames []string
 		for _, att := range m.entry.Attachments {
 			fileNames = append(fileNames, att.Filename)
 		}
-		b.WriteString(fileStyle.Render(strings.Join(fileNames, ", ")))
+		currentFiles = strings.Join(fileNames, ", ")
 	} else {
-		b.WriteString(fileLabelStyle.Render("Files: "))
-		b.WriteString(fileStyle.Render("(none)"))
+		currentFiles = "(none)"
 	}
-	b.WriteString("\n\n")
+	items = append(items, historyItem{0, currentLabel, m.entry.Content, currentFiles})
 
-	// Historical versions (sorted most recent first)
+	// Historical versions
 	for i, record := range sortedHistory {
-		displayIndex := i + 1
-
 		label := timestampStyle.Render(record.SavedAt.Format("2006-01-02 15:04:05"))
 		label += fmt.Sprintf(" (v%d)", len(sortedHistory)-i)
-
-		if m.selectedIndex == displayIndex {
-			b.WriteString(selectedStyle.Render("> " + label))
-		} else {
-			b.WriteString(itemStyle.Render("  " + label))
-		}
-		b.WriteString("\n")
-
-		// Show content (expanded or truncated)
-		if m.selectedIndex == displayIndex && m.expanded {
-			b.WriteString(expandedContentStyle.Render(record.Content))
-		} else {
-			b.WriteString(contentStyle.Render(truncate(record.Content, 100)))
-		}
-		b.WriteString("\n")
-
-		// Show attachments for this save
+		files := "(none)"
 		if len(record.Attachments) > 0 {
-			b.WriteString(fileLabelStyle.Render("Files: "))
-			b.WriteString(fileStyle.Render(strings.Join(record.Attachments, ", ")))
-		} else {
-			b.WriteString(fileLabelStyle.Render("Files: "))
-			b.WriteString(fileStyle.Render("(none)"))
+			files = strings.Join(record.Attachments, ", ")
 		}
+		items = append(items, historyItem{i + 1, label, record.Content, files})
+	}
+
+	// Render visible items based on offset
+	visibleItems := (m.height - 10) / 4
+	if visibleItems < 2 {
+		visibleItems = 2
+	}
+	end := m.offset + visibleItems
+	if end > len(items) {
+		end = len(items)
+	}
+
+	for _, item := range items[m.offset:end] {
+		if m.selectedIndex == item.index {
+			b.WriteString(selectedStyle.Render("> " + item.label))
+		} else {
+			b.WriteString(itemStyle.Render("  " + item.label))
+		}
+		b.WriteString("\n")
+
+		if m.selectedIndex == item.index && m.expanded {
+			b.WriteString(expandedContentStyle.Render(item.content))
+		} else {
+			b.WriteString(contentStyle.Render(truncate(item.content, 100)))
+		}
+		b.WriteString("\n")
+
+		b.WriteString(fileLabelStyle.Render("Files: "))
+		b.WriteString(fileStyle.Render(item.attachments))
 		b.WriteString("\n\n")
+	}
+
+	if len(items) > visibleItems {
+		scrollInfo := fmt.Sprintf("(%d-%d of %d)", m.offset+1, end, len(items))
+		scrollStyle := lipgloss.NewStyle().Foreground(t.Muted).Italic(true)
+		b.WriteString(scrollStyle.Render("  " + scrollInfo))
+		b.WriteString("\n")
 	}
 
 	b.WriteString(dividerStyle.Render(strings.Repeat("-", 60)))

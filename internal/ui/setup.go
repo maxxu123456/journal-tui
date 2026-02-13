@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"fmt"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -40,9 +42,10 @@ type SetupModel struct {
 	Error           string
 	defaultPath     string
 	baseDir         string
+	existingPaths   []string // paths of existing journals to avoid collisions
 }
 
-func NewSetupModel() SetupModel {
+func NewSetupModel(existingPaths ...string) SetupModel {
 	ti := textinput.New()
 	ti.Placeholder = "Enter path..."
 	ti.CharLimit = 256
@@ -79,6 +82,7 @@ func NewSetupModel() SetupModel {
 		confirmInput:  ci,
 		selectedOpt:   0,
 		baseDir:       baseDir,
+		existingPaths: existingPaths,
 	}
 }
 
@@ -103,8 +107,38 @@ func sanitizeFilename(name string) string {
 }
 
 func (m *SetupModel) generateDefaultPath() {
-	filename := sanitizeFilename(m.Name) + ".db"
-	m.defaultPath = filepath.Join(m.baseDir, filename)
+	base := sanitizeFilename(m.Name)
+	candidate := filepath.Join(m.baseDir, base+".db")
+
+	// Check against both existing config paths and files on disk
+	suffix := 0
+	for m.pathExists(candidate) {
+		suffix++
+		candidate = filepath.Join(m.baseDir, fmt.Sprintf("%s_%d.db", base, suffix))
+	}
+
+	m.defaultPath = candidate
+}
+
+func (m *SetupModel) pathExists(path string) bool {
+	// Check against existing journal paths in config
+	for _, p := range m.existingPaths {
+		expanded, err := storage.ExpandPath(p)
+		if err == nil {
+			candidateExpanded, err2 := storage.ExpandPath(path)
+			if err2 == nil && expanded == candidateExpanded {
+				return true
+			}
+		}
+	}
+	// Also check if file exists on disk
+	expanded, err := storage.ExpandPath(path)
+	if err == nil {
+		if _, err := os.Stat(expanded); err == nil {
+			return true
+		}
+	}
+	return false
 }
 
 func (m SetupModel) Init() tea.Cmd {

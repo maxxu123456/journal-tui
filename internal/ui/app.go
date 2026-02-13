@@ -147,10 +147,17 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			if a.selectorModel.CreateNew {
-				a.setupModel = NewSetupModel()
+				a.setupModel = NewSetupModel(a.existingJournalPaths()...)
 				a.currentView = ViewSetup
 			} else if a.selectorModel.Selected != nil {
-				a.activeJournal = a.selectorModel.Selected
+				// Find the journal in config to get a pointer into config.Journals
+				// (selectorModel.Selected is a copy, not a reference into config)
+				selected := a.selectorModel.Selected
+				a.activeJournal = storage.FindJournal(a.config, selected.Path)
+				if a.activeJournal == nil {
+					// Fallback: use the selector's copy
+					a.activeJournal = selected
+				}
 
 				// Update last opened time
 				storage.UpdateJournalLastOpened(a.config, a.activeJournal.Path, time.Now())
@@ -216,6 +223,15 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case ViewPassword:
 		a.passwordModel, cmd = a.passwordModel.Update(msg)
+		if a.passwordModel.Cancelled {
+			// Go back to selector
+			journals := storage.GetSortedJournals(a.config)
+			a.selectorModel = NewSelectorModel(journals, a.config.Theme)
+			a.currentView = ViewSelector
+			a.activeJournal = nil
+			a.password = ""
+			return a, nil
+		}
 		if a.passwordModel.Done {
 			journal, err := storage.LoadJournalEncrypted(a.activeJournal.Path, a.passwordModel.Password)
 			if err != nil {
@@ -485,11 +501,26 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return a, cmd
 }
 
-func (a App) saveJournal() error {
-	if a.activeJournal != nil && a.activeJournal.Encrypted {
-		return storage.SaveJournalEncrypted(a.journal, a.activeJournal.Path, a.password)
+func (a App) existingJournalPaths() []string {
+	if a.config == nil {
+		return nil
 	}
-	return storage.SaveJournal(a.journal, a.config.ActiveJournal)
+	paths := make([]string, len(a.config.Journals))
+	for i, j := range a.config.Journals {
+		paths[i] = j.Path
+	}
+	return paths
+}
+
+func (a App) saveJournal() error {
+	path := a.config.ActiveJournal
+	if a.activeJournal != nil {
+		path = a.activeJournal.Path
+	}
+	if a.activeJournal != nil && a.activeJournal.Encrypted {
+		return storage.SaveJournalEncrypted(a.journal, path, a.password)
+	}
+	return storage.SaveJournal(a.journal, path)
 }
 
 func (a App) View() string {
