@@ -41,6 +41,8 @@ func (m PasswordModel) Update(msg tea.Msg) (PasswordModel, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		m.Error = ""
+
 		switch msg.String() {
 		case "enter":
 			if m.passwordInput.Value() != "" {
@@ -54,7 +56,6 @@ func (m PasswordModel) Update(msg tea.Msg) (PasswordModel, tea.Cmd) {
 		}
 	}
 
-	m.Error = ""
 	m.passwordInput, cmd = m.passwordInput.Update(msg)
 	return m, cmd
 }

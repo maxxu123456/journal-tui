@@ -1,6 +1,7 @@
 package model
 
 import (
+	"strings"
 	"time"
 )
 
@@ -17,9 +18,9 @@ type Attachment struct {
 
 // SaveRecord represents a previous version of an entry
 type SaveRecord struct {
-	Content     string   `json:"content"`
+	Content     string    `json:"content"`
 	SavedAt     time.Time `json:"saved_at"`
-	Attachments []string `json:"attachments,omitempty"` // Filenames at time of save
+	Attachments []string  `json:"attachments,omitempty"` // Filenames at time of save
 }
 
 // Entry represents a single journal entry
@@ -58,11 +59,14 @@ type Config struct {
 	Theme         string      `json:"theme,omitempty"`          // Color theme name
 }
 
-// Preview returns a truncated preview of the entry content
+// Preview returns a single-line, truncated preview of the entry content.
+// Truncation is by rune so multi-byte characters are never split in half, and
+// newlines are collapsed so a preview can never break the list layout.
 func (e Entry) Preview(maxLen int) string {
-	content := e.Content
-	if len(content) > maxLen {
-		content = content[:maxLen] + "..."
+	content := strings.Join(strings.Fields(e.Content), " ")
+	runes := []rune(content)
+	if len(runes) > maxLen {
+		return string(runes[:maxLen]) + "..."
 	}
 	return content
 }

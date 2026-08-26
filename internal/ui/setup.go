@@ -121,20 +121,28 @@ func (m *SetupModel) generateDefaultPath() {
 }
 
 func (m *SetupModel) pathExists(path string) bool {
-	// Check against existing journal paths in config
-	for _, p := range m.existingPaths {
-		expanded, err := storage.ExpandPath(p)
-		if err == nil {
-			candidateExpanded, err2 := storage.ExpandPath(path)
-			if err2 == nil && expanded == candidateExpanded {
-				return true
-			}
-		}
+	if m.pathInUse(path) {
+		return true
 	}
 	// Also check if file exists on disk
 	expanded, err := storage.ExpandPath(path)
 	if err == nil {
 		if _, err := os.Stat(expanded); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
+// pathInUse reports whether another configured journal already lives at path.
+func (m *SetupModel) pathInUse(path string) bool {
+	candidate, err := storage.ExpandPath(path)
+	if err != nil {
+		return false
+	}
+	for _, p := range m.existingPaths {
+		existing, err := storage.ExpandPath(p)
+		if err == nil && existing == candidate {
 			return true
 		}
 	}
@@ -171,6 +179,10 @@ func (m SetupModel) Update(msg tea.Msg) (SetupModel, tea.Cmd) {
 				switch msg.String() {
 				case "enter":
 					if m.textInput.Value() != "" {
+						if m.pathInUse(m.textInput.Value()) {
+							m.Error = "Another journal already uses that path"
+							return m, nil
+						}
 						m.DBPath = m.textInput.Value()
 						m.step = stepChooseEncryption
 						m.showPathInput = false
@@ -179,10 +191,12 @@ func (m SetupModel) Update(msg tea.Msg) (SetupModel, tea.Cmd) {
 					}
 					return m, nil
 				case "esc":
+					m.Error = ""
 					m.showPathInput = false
 					m.textInput.Blur()
 					return m, nil
 				}
+				m.Error = ""
 				m.textInput, cmd = m.textInput.Update(msg)
 				return m, cmd
 			}
@@ -340,7 +354,16 @@ func (m SetupModel) View() string {
 			b.WriteString("\n")
 			b.WriteString("    ")
 			b.WriteString(m.textInput.View())
-			b.WriteString("\n\n")
+			b.WriteString("\n")
+
+			if m.Error != "" {
+				b.WriteString("\n")
+				b.WriteString("    ")
+				b.WriteString(errorStyle.Render(m.Error))
+				b.WriteString("\n")
+			}
+
+			b.WriteString("\n")
 			b.WriteString(helpStyle.Render("    " + keyStyle.Render("Enter") + " confirm  " + keyStyle.Render("Esc") + " cancel"))
 		} else {
 			b.WriteString("\n")

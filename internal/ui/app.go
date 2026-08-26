@@ -37,15 +37,15 @@ type App struct {
 	password      string
 
 	// Sub-models
-	selectorModel    SelectorModel
-	setupModel       SetupModel
-	passwordModel    PasswordModel
-	listModel        ListModel
-	editorModel      EditorModel
-	settingsModel    SettingsModel
-	historyModel     HistoryModel
-	attachmentModel  AttachmentModel
-	exportModel      ExportModel
+	selectorModel   SelectorModel
+	setupModel      SetupModel
+	passwordModel   PasswordModel
+	listModel       ListModel
+	editorModel     EditorModel
+	settingsModel   SettingsModel
+	historyModel    HistoryModel
+	attachmentModel AttachmentModel
+	exportModel     ExportModel
 
 	// State
 	width  int
@@ -115,6 +115,8 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		a.width = msg.Width
 		a.height = msg.Height
+		// Only the visible model is resized here; the others are given the
+		// current size when they are constructed on entry to their view.
 		switch a.currentView {
 		case ViewList:
 			a.listModel.SetSize(msg.Width, msg.Height)
@@ -144,6 +146,10 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if a.selectorModel.ThemeChanged {
 				a.config.Theme = a.selectorModel.NewTheme
 				storage.SaveConfig(a.config)
+			}
+
+			if a.selectorModel.Quit {
+				return a, tea.Quit
 			}
 
 			if a.selectorModel.CreateNew {
@@ -185,6 +191,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ViewSetup:
 		a.setupModel, cmd = a.setupModel.Update(msg)
 		if a.setupModel.Done {
+			var err error
 			if a.config == nil {
 				a.config = &model.Config{}
 			}
@@ -202,20 +209,30 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return a, nil
 			}
 
+			var journal *model.Journal
 			if a.setupModel.Encrypt {
 				a.password = a.setupModel.Password
 				if err := storage.CreateEmptyJournalEncrypted(a.setupModel.DBPath, a.password); err != nil {
 					a.err = err
 					return a, nil
 				}
+				journal, err = storage.LoadJournalEncrypted(a.setupModel.DBPath, a.password)
 			} else {
 				if err := storage.CreateEmptyJournal(a.setupModel.DBPath); err != nil {
 					a.err = err
 					return a, nil
 				}
+				journal, err = storage.LoadJournal(a.setupModel.DBPath)
+			}
+			if err != nil {
+				a.err = err
+				return a, nil
 			}
 
-			a.journal = &model.Journal{Entries: []model.Entry{}}
+			// The path may already hold a database; adopt its entries instead of
+			// starting empty and overwriting them on the first save.
+			a.journal = journal
+			sortEntriesNewestFirst(a.journal)
 			a.currentView = ViewList
 			a.listModel = NewListModel(a.journal)
 			a.listModel.SetSize(a.width, a.height)

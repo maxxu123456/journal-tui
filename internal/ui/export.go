@@ -55,6 +55,9 @@ func (m ExportModel) Update(msg tea.Msg) (ExportModel, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		m.Error = ""
+		m.Message = ""
+
 		switch msg.String() {
 		case "enter":
 			destPath := m.pathInput.Value()
@@ -80,7 +83,6 @@ func (m ExportModel) Update(msg tea.Msg) (ExportModel, tea.Cmd) {
 		}
 	}
 
-	m.Error = ""
 	m.pathInput, cmd = m.pathInput.Update(msg)
 	return m, cmd
 }

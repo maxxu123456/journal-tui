@@ -7,17 +7,17 @@ type Theme struct {
 	Name string
 
 	// Primary colors
-	Title      lipgloss.Color
-	Accent     lipgloss.Color
-	Selected   lipgloss.Color
-	Muted      lipgloss.Color
-	Text       lipgloss.Color
-	TextDim    lipgloss.Color
-	Success    lipgloss.Color
-	Error      lipgloss.Color
-	Warning    lipgloss.Color
-	Info       lipgloss.Color
-	Disabled   lipgloss.Color
+	Title    lipgloss.Color
+	Accent   lipgloss.Color
+	Selected lipgloss.Color
+	Muted    lipgloss.Color
+	Text     lipgloss.Color
+	TextDim  lipgloss.Color
+	Success  lipgloss.Color
+	Error    lipgloss.Color
+	Warning  lipgloss.Color
+	Info     lipgloss.Color
+	Disabled lipgloss.Color
 }
 
 var themes = map[string]Theme{

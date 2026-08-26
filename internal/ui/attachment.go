@@ -71,6 +71,8 @@ func (m AttachmentModel) Update(msg tea.Msg) (AttachmentModel, tea.Cmd) {
 	if m.addMode {
 		switch msg := msg.(type) {
 		case tea.KeyMsg:
+			m.Error = ""
+
 			switch msg.String() {
 			case "enter":
 				path := m.pathInput.Value()
@@ -93,7 +95,6 @@ func (m AttachmentModel) Update(msg tea.Msg) (AttachmentModel, tea.Cmd) {
 				return m, nil
 			}
 		}
-		m.Error = ""
 		m.pathInput, cmd = m.pathInput.Update(msg)
 		return m, cmd
 	}

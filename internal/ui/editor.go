@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"errors"
 	"strings"
 	"time"
 
@@ -45,24 +46,22 @@ func NewEditorModel(entry *model.Entry) EditorModel {
 	ta.SetWidth(60)
 	ta.SetHeight(10)
 
-	m := EditorModel{
+	if entry != nil {
+		ti.SetValue(entry.Date)
+		ta.SetValue(entry.Content)
+	} else {
+		ti.SetValue(time.Now().Format("2006-01-02"))
+	}
+
+	// The date field is focused first, so it must accept keystrokes right away.
+	ti.Focus()
+
+	return EditorModel{
 		dateInput:    ti,
 		contentArea:  ta,
 		focusedField: fieldDate,
 		EditingEntry: entry,
 	}
-
-	if entry != nil {
-		ti.SetValue(entry.Date)
-		ta.SetValue(entry.Content)
-		m.dateInput = ti
-		m.contentArea = ta
-	} else {
-		ti.SetValue(time.Now().Format("2006-01-02"))
-		m.dateInput = ti
-	}
-
-	return m
 }
 
 func (m *EditorModel) SetSize(width, height int) {
@@ -87,7 +86,6 @@ func (m *EditorModel) SetSize(width, height int) {
 }
 
 func (m EditorModel) Init() tea.Cmd {
-	m.dateInput.Focus()
 	return textinput.Blink
 }
 
@@ -96,6 +94,8 @@ func (m EditorModel) Update(msg tea.Msg) (EditorModel, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		m.Error = ""
+
 		switch msg.String() {
 		case "tab", "shift+tab":
 			if m.focusedField == fieldDate {
@@ -115,14 +115,14 @@ func (m EditorModel) Update(msg tea.Msg) (EditorModel, tea.Cmd) {
 			return m, nil
 
 		case "ctrl+s":
-			if m.dateInput.Value() != "" && m.contentArea.Value() != "" {
-				m.Saved = true
+			if err := m.validate(); err != nil {
+				m.Error = err.Error()
+				return m, nil
 			}
+			m.Saved = true
 			return m, nil
 		}
 	}
-
-	m.Error = ""
 
 	if m.focusedField == fieldDate {
 		m.dateInput, cmd = m.dateInput.Update(msg)
@@ -133,8 +133,23 @@ func (m EditorModel) Update(msg tea.Msg) (EditorModel, tea.Cmd) {
 	return m, cmd
 }
 
+// validate reports why the entry cannot be saved, or nil when it can.
+func (m EditorModel) validate() error {
+	date := strings.TrimSpace(m.dateInput.Value())
+	if date == "" {
+		return errors.New("date is required")
+	}
+	if _, err := time.Parse("2006-01-02", date); err != nil {
+		return errors.New("date must be a real date in YYYY-MM-DD format")
+	}
+	if strings.TrimSpace(m.contentArea.Value()) == "" {
+		return errors.New("content is required")
+	}
+	return nil
+}
+
 func (m EditorModel) GetDate() string {
-	return m.dateInput.Value()
+	return strings.TrimSpace(m.dateInput.Value())
 }
 
 func (m EditorModel) GetEntry() model.Entry {
@@ -143,7 +158,7 @@ func (m EditorModel) GetEntry() model.Entry {
 	if m.EditingEntry != nil {
 		return model.Entry{
 			ID:        m.EditingEntry.ID,
-			Date:      m.dateInput.Value(),
+			Date:      m.GetDate(),
 			Content:   m.contentArea.Value(),
 			CreatedAt: m.EditingEntry.CreatedAt,
 			UpdatedAt: now,
@@ -152,7 +167,7 @@ func (m EditorModel) GetEntry() model.Entry {
 
 	return model.Entry{
 		ID:        uuid.New().String(),
-		Date:      m.dateInput.Value(),
+		Date:      m.GetDate(),
 		Content:   m.contentArea.Value(),
 		CreatedAt: now,
 		UpdatedAt: now,

@@ -16,6 +16,7 @@ type SelectorModel struct {
 	selectedIndex int
 	Selected      *model.JournalDB
 	CreateNew     bool
+	Quit          bool
 	Done          bool
 	themeIndex    int
 	themes        []string
@@ -89,7 +90,10 @@ func (m SelectorModel) Update(msg tea.Msg) (SelectorModel, tea.Cmd) {
 			}
 			m.Done = true
 		case "q":
-			return m, tea.Quit
+			// Signal the app rather than quitting here, so a theme picked on
+			// this screen is still persisted on the way out.
+			m.Quit = true
+			m.Done = true
 		}
 	}
 
